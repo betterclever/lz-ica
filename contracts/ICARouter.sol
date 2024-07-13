@@ -13,6 +13,7 @@ import {TypeCasts} from "./libs/TypeCasts.sol";
 
 contract ICARouter is OApp {
 
+    uint32 internal selfEid = 0;
     address internal implementation;
     bytes32 internal bytecodeHash;
 
@@ -23,9 +24,19 @@ contract ICARouter is OApp {
 
     mapping(address => AccountOwner) public accountOwners;
 
-    constructor(address _endpoint, address _delegate) OApp(_endpoint, _delegate) Ownable(_delegate) {}
-    
+    constructor(
+        uint32 _endpointId,
+        address _endpoint,
+        address _delegate
+    ) OApp(_endpoint, _delegate) Ownable(_delegate) {
 
+        selfEid = _endpointId;
+        implementation = address(new OwnableMulticall(address(this)));
+        // cannot be stored immutably because it is dynamically sized
+        bytes memory _bytecode = MinimalProxy.bytecode(implementation);
+        bytecodeHash = keccak256(_bytecode);
+    }
+    
     event InterchainAccountCreated(
         uint32 indexed origin,
         bytes32 indexed owner,
@@ -89,6 +100,7 @@ contract ICARouter is OApp {
             _origin.sender,
             TypeCasts.bytes32ToAddress(_ism)
         );
+        
         _interchainAccount.multicall(_calls);
     }
 
@@ -127,5 +139,39 @@ contract ICARouter is OApp {
         bytes32 _salt
     ) private view returns (address payable) {
         return payable(Create2.computeAddress(_salt, bytecodeHash));
+    }
+
+    function getRemoteInterchainAccount(
+        address _owner,
+        address _router
+    ) public view returns (address) {
+        require(_router != address(0), "no router specified for destination");
+
+        address _ism = address(0);
+        // Derives the address of the first contract deployed by _router using
+        // the CREATE opcode.
+        address _implementation = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            bytes1(0xd6),
+                            bytes1(0x94),
+                            _router,
+                            bytes1(0x01)
+                        )
+                    )
+                )
+            )
+        );
+        bytes memory _proxyBytecode = MinimalProxy.bytecode(_implementation);
+        bytes32 _bytecodeHash = keccak256(_proxyBytecode);
+        bytes32 _salt = _getSalt(
+            selfEid,
+            TypeCasts.addressToBytes32(_owner),
+            TypeCasts.addressToBytes32(address(this)),
+            TypeCasts.addressToBytes32(_ism)
+        );
+        return Create2.computeAddress(_salt, _bytecodeHash, _router);
     }
 }
