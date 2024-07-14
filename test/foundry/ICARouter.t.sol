@@ -72,7 +72,7 @@ contract ICARouterTest is TestHelperOz5 {
         // user A sends 10 ether to interchain account on chain B
         address interchainAccount = aOApp.getRemoteInterchainAccount(
             userA,
-            address(aOApp)
+            address(bOApp)
         );
 
         console.log("interchainAccount: %s", interchainAccount);
@@ -117,5 +117,10 @@ contract ICARouterTest is TestHelperOz5 {
                 data,
                 options
             );
+        
+        verifyPackets(bEid, addressToBytes32(address(bOApp)));
+
+        // log balance of userC
+        console.log("userC token balance: %s", token.balanceOf(userC));
     }
 }
