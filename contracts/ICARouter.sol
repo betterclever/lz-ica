@@ -120,7 +120,7 @@ contract ICARouter is OApp {
             bytes32 _ism,
             CallLib.Call[] memory _calls
         ) = InterchainAccountMessage.decode(_message);
-        
+
         console.log("here 4");
 
         OwnableMulticall _interchainAccount = getDeployedInterchainAccount(
@@ -129,6 +129,8 @@ contract ICARouter is OApp {
             _origin.sender,
             TypeCasts.bytes32ToAddress(_ism)
         );
+
+        console.log("address of interchain account: %s", address(_interchainAccount));
         
         console.log("here 5");
         _interchainAccount.multicall(_calls);
