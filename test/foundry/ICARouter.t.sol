@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 // MyOApp imports
 import { ICARouter } from "../../contracts/ICARouter.sol";
+import { TestERC20 } from "../../contracts/TestERC20.sol";
 
 // OApp imports
 import { IOAppOptionsType3, EnforcedOptionParam } from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OAppOptionsType3.sol";
@@ -27,6 +28,8 @@ contract ICARouterTest is TestHelperOz5 {
     ICARouter private aOApp;
     ICARouter private bOApp;
 
+    TestERC20 private token;
+
     address private userA = address(0x1);
     address private userB = address(0x2);
 
@@ -45,6 +48,8 @@ contract ICARouterTest is TestHelperOz5 {
 
         aOApp = ICARouter(_deployOApp(type(ICARouter).creationCode, abi.encode(aEid, address(endpoints[aEid]), address(this))));
         bOApp = ICARouter(_deployOApp(type(ICARouter).creationCode, abi.encode(bEid, address(endpoints[bEid]), address(this))));
+
+        token = new TestERC20(100000, "Test Token", "TST", userA);
 
         console.log("aOApp: %s", address(aOApp));
         console.log("bOApp: %s", address(bOApp));
@@ -75,24 +80,41 @@ contract ICARouterTest is TestHelperOz5 {
         // deal funds to ICA
         vm.deal(interchainAccount, 10 ether);
 
+        // log token balances
+        console.log("userA token balance: %s", token.balanceOf(userA));
+        console.log("interchainAccount token balance: %s", token.balanceOf(interchainAccount));
+
+        // let's send some TestERC20 tokens to the interchain account
+        vm.prank(userA);
+        token.transfer(interchainAccount, 1000);
+
+        // log token balances
+        console.log("userA token balance: %s", token.balanceOf(userA));
+        console.log("interchainAccount token balance: %s", token.balanceOf(interchainAccount));
+
+
         bytes memory options = OptionsBuilder.newOptions()
             .addExecutorLzReceiveOption(400000, 0);
+
+        // endcode the transfer call
+        bytes memory data = abi.encodeWithSignature("transfer(address,uint256)", userC, 1000);
 
         // get fee qoute
         MessagingFee memory fee = aOApp.quote(
             bEid,
             interchainAccount,
             1 ether,
-            abi.encodeWithSignature("0x00"),
+            data,
             options
         );
-
+        
+        // because we want A's ICA to be used
+        vm.prank(userA);
         aOApp.call{value: fee.nativeFee}(
                 bEid,
-                address(this),
-                1 ether,
-                abi.encodeWithSignature("0x00"),
-                // create layerzero options
+                address(token),
+                0 ether,
+                data,
                 options
             );
     }
