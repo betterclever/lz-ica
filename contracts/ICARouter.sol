@@ -11,6 +11,8 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {MinimalProxy} from "./libs/MinimalProxy.sol";
 import {TypeCasts} from "./libs/TypeCasts.sol";
 
+import "hardhat/console.sol";
+
 contract ICARouter is OApp {
 
     uint32 internal selfEid = 0;
@@ -44,6 +46,27 @@ contract ICARouter is OApp {
         address account
     );
 
+    function quote(
+        uint32 _destinationEndpointId,
+        address _to,
+        uint256 _value,
+        bytes memory _data,
+        bytes calldata _options
+    ) external view returns (MessagingFee memory fee) {
+
+        // _ism is a default value for now
+        bytes32 _ism = bytes32(0);
+        bytes memory _body = InterchainAccountMessage.encode(
+            msg.sender,
+            _ism,
+            _to,
+            _value,
+            _data
+        );
+
+        fee = _quote(_destinationEndpointId, _body, _options, false);
+    }
+
     // creates an ICA call to the remote account
     function call(
         uint32 _destinationEndpointId,
@@ -63,8 +86,13 @@ contract ICARouter is OApp {
             _data
         );
 
+        console.log("here 1");
+        console.log("destinationEndpointId: %s", _destinationEndpointId);
+
         // send via _lzSend
         receipt = _lzSend(_destinationEndpointId, _body, _options, MessagingFee(msg.value, 0), payable(msg.sender));
+
+        console.log("here 2");
     }
 
     function isContract(address _account) public view returns (bool) {
@@ -76,7 +104,6 @@ contract ICARouter is OApp {
         return size > 0;
     }
 
-    // TODO: handles call from a remote owner
     
     function _lzReceive(
         Origin calldata _origin,
@@ -86,13 +113,15 @@ contract ICARouter is OApp {
         bytes calldata _extraData
     ) internal virtual override {
 
+        console.log("here 3");
         // decode the message
         (
             bytes32 _owner,
             bytes32 _ism,
             CallLib.Call[] memory _calls
         ) = InterchainAccountMessage.decode(_message);
-
+        
+        console.log("here 4");
 
         OwnableMulticall _interchainAccount = getDeployedInterchainAccount(
             _origin.srcEid,
@@ -101,7 +130,10 @@ contract ICARouter is OApp {
             TypeCasts.bytes32ToAddress(_ism)
         );
         
+        console.log("here 5");
         _interchainAccount.multicall(_calls);
+
+        console.log("here 6");
     }
 
     function getDeployedInterchainAccount(

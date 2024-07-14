@@ -6,6 +6,7 @@ import { ICARouter } from "../../contracts/ICARouter.sol";
 
 // OApp imports
 import { IOAppOptionsType3, EnforcedOptionParam } from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OAppOptionsType3.sol";
+import { MessagingFee } from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
 import { OptionsBuilder } from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 
 // OZ imports
@@ -40,43 +41,59 @@ contract ICARouterTest is TestHelperOz5 {
         super.setUp();
         setUpEndpoints(2, LibraryType.UltraLightNode);
 
-        // aOApp = ICARouter(_deployOApp(type(ICARouter).creationCode, abi.encode(address(endpoints[aEid]), address(this))));
-        // bOApp = ICARouter(_deployOApp(type(ICARouter).creationCode, abi.encode(address(endpoints[bEid]), address(this))));
+        console.log("endpoints[aEid]: %s", address(endpoints[aEid]));
 
-        // address[] memory oapps = new address[](2);
-        // oapps[0] = address(aOApp);
-        // oapps[1] = address(bOApp);
-        // this.wireOApps(oapps);
+        aOApp = ICARouter(_deployOApp(type(ICARouter).creationCode, abi.encode(aEid, address(endpoints[aEid]), address(this))));
+        bOApp = ICARouter(_deployOApp(type(ICARouter).creationCode, abi.encode(bEid, address(endpoints[bEid]), address(this))));
+
+        console.log("aOApp: %s", address(aOApp));
+        console.log("bOApp: %s", address(bOApp));
+        address[] memory oapps = new address[](2);
+        oapps[0] = address(aOApp);
+        oapps[1] = address(bOApp);
+        this.wireOApps(oapps);
     }
 
     function test_constructor() public {
         assertEq(aOApp.owner(), address(this));
         assertEq(bOApp.owner(), address(this));
 
-        // assertEq(address(aOApp.endpoint()), address(endpoints[aEid]));
-        // assertEq(address(bOApp.endpoint()), address(endpoints[bEid]));
+        assertEq(address(aOApp.endpoint()), address(endpoints[aEid]));
+        assertEq(address(bOApp.endpoint()), address(endpoints[bEid]));
     }
 
     function test_call() public {
 
         // user A sends 10 ether to interchain account on chain B
-        // address interchainAccount = aOApp.getRemoteInterchainAccount(
-        //     userA,
-        //     address(aOApp)
-        // );
+        address interchainAccount = aOApp.getRemoteInterchainAccount(
+            userA,
+            address(aOApp)
+        );
 
-        // // deal funds to ICA
-        // vm.deal(interchainAccount, 10 ether);
-        
+        console.log("interchainAccount: %s", interchainAccount);
 
-    //    aOApp.call(
-    //         bEid,
-    //         address(this),
-    //         1 ether,
-    //         abi.encodeWithSignature("0x00"),
-    //         // create layerzero options
-    //         OptionsBuilder.newOptions()
-    //             // .addExecutorLzReceiveOption(200000, 1 ether)
-    //     );
+        // deal funds to ICA
+        vm.deal(interchainAccount, 10 ether);
+
+        bytes memory options = OptionsBuilder.newOptions()
+            .addExecutorLzReceiveOption(400000, 0);
+
+        // get fee qoute
+        MessagingFee memory fee = aOApp.quote(
+            bEid,
+            interchainAccount,
+            1 ether,
+            abi.encodeWithSignature("0x00"),
+            options
+        );
+
+        aOApp.call{value: fee.nativeFee}(
+                bEid,
+                address(this),
+                1 ether,
+                abi.encodeWithSignature("0x00"),
+                // create layerzero options
+                options
+            );
     }
 }
